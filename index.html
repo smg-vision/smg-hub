@@ -827,7 +827,7 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
   <div class="actions"><button class="btn" value="no">ยกเลิก</button><button class="btn pri" value="yes" id="cfOk">ยืนยัน</button></div>
 </form></dialog>
 <dialog id="lb" class="lb"><div class="lb-body">
-  <img class="lb-img" id="lbImg" alt="">
+  <img class="lb-img" id="lbImg" alt="" style="-webkit-touch-callout:default!important;user-select:auto!important;pointer-events:auto!important;cursor:pointer">
   <div class="lb-bar">
     <span class="meta" id="lbInfo"></span>
     <button class="btn sm" type="button" id="lbPrev">← ก่อนหน้า</button>
@@ -835,6 +835,7 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
     <button class="btn sm" type="button" id="lbCopy">คัดลอกรูป</button>
     <button class="btn sm pri" type="button" id="lbDl" hidden>ดาวน์โหลดรูป</button>
     <button class="btn sm" type="button" id="lbClose">ปิด</button>
+    <div style="font-size:12px;color:var(--muted);text-align:center;width:100%;margin-top:2px;">💡 บน iPhone: กดปุ่มเพื่อบันทึกเข้าคลังภาพ หรือแตะค้างที่รูปภาพได้เลยครับ</div>
   </div>
 </div></dialog>
 <dialog id="pv" class="pv" aria-label="ดูสไลด์เต็มจอ"><div class="pv-in">
@@ -977,6 +978,25 @@ const ASSET_ID = /^[A-Za-z0-9_-]{8,64}$/;
 const dlApi = {
   async save({ filename, data, type }) {
     const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'application/json' });
+    const isImage = (blob.type || type || '').startsWith('image/');
+    
+    // On iPhone / iPad / iOS Safari or devices with Web Share API:
+    // Sharing file directly brings up native sheet with "บันทึกภาพ" (Save Image to Photos Library)
+    if(isImage && typeof navigator !== 'undefined' && navigator.canShare){
+      try {
+        const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+        if(navigator.canShare({ files: [file] })){
+          await navigator.share({
+            files: [file],
+            title: filename
+          });
+          return;
+        }
+      } catch(err){
+        if(err && err.name === 'AbortError') return; // User cancelled share sheet
+      }
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -2044,7 +2064,10 @@ function showLb(){
   const im = document.getElementById('lbImg'); im.src = imgUrl(imgs[lbIdx]);
   document.getElementById('lbInfo').textContent = `${lbItem.name} · ${lbItem.deck?'หน้า':'รูป'} ${lbIdx+1} / ${imgs.length}`;
   document.getElementById('lbPrev').hidden = document.getElementById('lbNext').hidden = imgs.length < 2;
-  document.getElementById('lbDl').hidden = !dlApi;
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const dlBtn = document.getElementById('lbDl');
+  dlBtn.hidden = !dlApi;
+  dlBtn.textContent = isIos ? 'บันทึกภาพเข้าคลัง' : 'ดาวน์โหลดรูป';
 }
 const pv = document.getElementById('pv'), pvTrack = document.getElementById('pvTrack');
 let pvItem = null, pvIdx = 0, pvRaf = 0, pvHtmlOv = '', pvT = 0;
@@ -2075,7 +2098,10 @@ function openPres(it){
   pvItem = it; pvIdx = 0;
   document.getElementById('pvTitle').textContent = it.title || 'สไลด์';
   pvTrack.innerHTML = it.images.map((id,i) => `<figure><img data-src="${imgUrl(id)}" alt="หน้า ${i+1}" draggable="false"></figure>`).join('');
-  document.getElementById('pvDl').hidden = !dlApi;
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const pvDlBtn = document.getElementById('pvDl');
+  pvDlBtn.hidden = !dlApi;
+  pvDlBtn.textContent = isIos ? 'บันทึกภาพเข้าคลัง' : 'บันทึกหน้านี้';
   pv.classList.remove('hide-ui','rot');
   pvHtmlOv = document.documentElement.style.overflow; document.documentElement.style.overflow = 'hidden';
   pv.showModal(); requestAnimationFrame(() => pvGo(0, false));
@@ -2114,17 +2140,17 @@ async function exportHdImageBlob(img){
 
   const MIN_BYTES = 800 * 1024; // 800 KB
 
-  // 1. Initial attempt: target ~2400px on longest side with quality 0.96
-  let target = Math.max(2400, maxDim);
+  // 1. Initial attempt: target ~2600px on longest side with quality 0.97
+  let target = Math.max(2600, maxDim);
   let scale = target / maxDim;
-  let blob = await render(natW * scale, natH * scale, 0.96);
+  let blob = await render(natW * scale, natH * scale, 0.97);
 
   if(blob && blob.size >= MIN_BYTES) {
     return { blob, ext: 'jpg' };
   }
 
   // 2. Scale up to 3000px and quality 0.985
-  target = Math.max(3000, target * 1.25);
+  target = Math.max(3000, target * 1.2);
   scale = target / maxDim;
   let blob2 = await render(natW * scale, natH * scale, 0.985);
   if(blob2 && blob2.size >= MIN_BYTES) {
@@ -2150,9 +2176,10 @@ async function exportHdImageBlob(img){
 
 document.getElementById('pvDl').onclick = async () => {
   if(!dlApi || !pvItem) return;
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const btn = document.getElementById('pvDl');
   btn.disabled = true;
-  btn.textContent = 'กำลังเตรียม HD…';
+  btn.textContent = 'กำลังเตรียมรูป HD…';
   try{
     const img = pvTrack.children[pvIdx].firstElementChild;
     const { blob, ext } = await exportHdImageBlob(img);
@@ -2160,9 +2187,9 @@ document.getElementById('pvDl').onclick = async () => {
     await dlApi.save({filename:`${name}-หน้า${pvIdx+1}.${ext}`, data:blob});
     const szKb = Math.round(blob.size / 1024);
     const szMb = (blob.size / (1024 * 1024)).toFixed(2);
-    toast(`บันทึกรูป HD คมชัดแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})`);
+    toast(isIos ? `บันทึกรูปเข้าคลังภาพแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})` : `บันทึกรูป HD คมชัดแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})`);
   }catch(e){ if(e?.code!=='declined') toast('บันทึกรูปไม่ได้ในตอนนี้'); }
-  finally{ btn.disabled = false; btn.textContent = 'บันทึกหน้านี้'; }
+  finally{ btn.disabled = false; btn.textContent = isIos ? 'บันทึกภาพเข้าคลัง' : 'บันทึกหน้านี้'; }
 };
 function imgToBlob(type){
   const img = document.getElementById('lbImg'), c = document.createElement('canvas');
@@ -2176,6 +2203,7 @@ lb.addEventListener('click', e => { if(e.target === lb) lb.close(); });
 lb.addEventListener('keydown', e => { if(e.key==='ArrowLeft'){ lbIdx--; showLb(); } if(e.key==='ArrowRight'){ lbIdx++; showLb(); } });
 document.getElementById('lbDl').onclick = async () => {
   if(!dlApi) return;
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const btn = document.getElementById('lbDl');
   btn.disabled = true;
   btn.textContent = 'กำลังเตรียมรูป HD…';
@@ -2186,16 +2214,16 @@ document.getElementById('lbDl').onclick = async () => {
     await dlApi.save({filename:`${name}-${lbIdx+1}.${ext}`, data:blob});
     const szKb = Math.round(blob.size / 1024);
     const szMb = (blob.size / (1024 * 1024)).toFixed(2);
-    toast(`ดาวน์โหลดรูป HD คมชัดแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})`);
+    toast(isIos ? `บันทึกรูปเข้าคลังภาพแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})` : `ดาวน์โหลดรูป HD คมชัดแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})`);
   }catch(e){ if(e?.code!=='declined') toast('ดาวน์โหลดรูปไม่ได้ในตอนนี้'); }
-  finally{ btn.disabled = false; btn.textContent = 'ดาวน์โหลดรูป'; }
+  finally{ btn.disabled = false; btn.textContent = isIos ? 'บันทึกภาพเข้าคลัง' : 'ดาวน์โหลดรูป'; }
 };
 document.getElementById('lbCopy').onclick = async () => {
   try{
     const blobP = imgToBlob('image/png');
     await navigator.clipboard.write([new ClipboardItem({'image/png':blobP})]);
     toast('คัดลอกรูปแล้ว วางในแชตลูกค้าได้เลย');
-  }catch(e){ toast(dlApi ? 'คัดลอกรูปไม่ได้ในเบราว์เซอร์นี้ ใช้ปุ่มดาวน์โหลดรูปแทน' : 'คัดลอกรูปไม่ได้ในเบราว์เซอร์นี้ กดค้างที่รูปเพื่อบันทึกแทน'); }
+  }catch(e){ toast('คัดลอกรูปไม่ได้ในเบราว์เซอร์นี้ แตะค้างที่รูปเพื่อบันทึกภาพ หรือกดปุ่มบันทึกภาพเข้าคลังแทน'); }
 };
 
 /* ===================== เหตุการณ์ ===================== */
