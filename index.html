@@ -1448,7 +1448,7 @@ function notifyBox(){
   const {list, isNew} = latestUpd(), nw = list;
   if(!nw.length) return '';
   return `<section class="notify" role="status"><div class="notify-h"><span class="bell" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><b>${isNew?`มีอัปเดตใหม่ ${nw.length} รายการ`:`อัปเดตล่าสุด ${fmtY(nw[0].date)}`}</b><span class="meta">${isNew?'ตั้งแต่เข้ามาครั้งก่อน':''}</span></div>
-    <ul>${nw.slice(0,6).map(u=>`<li>${TABS.some(t=>t[0]===u.tab)&&u.tab!=='home'&&(EDIT||u.tab!=='plan')?`<a href="#${u.tab}">${esc(u.what)}</a>`:esc(u.what)}</li>`).join('')}${nw.length>6?`<li class="meta">และอีก ${nw.length-6} รายการด้านล่าง</li>`:''}</ul>
+    <ul>${nw.slice(0,6).map(u=>`<li>${TABS.some(t=>t[0]===u.tab)&&u.tab!=='home'?`<a href="#${u.tab}">${esc(u.what)}</a>`:esc(u.what)}</li>`).join('')}${nw.length>6?`<li class="meta">และอีก ${nw.length-6} รายการด้านล่าง</li>`:''}</ul>
     ${isNew?`<div class="row"><button class="btn sm pri" data-act="seen">รับทราบแล้ว</button></div>`:''}</section>`;
 }
 
@@ -1549,6 +1549,7 @@ function openSocial(){
 const TABS = [
   ['home','หน้าแรก',()=>unseen().length],
   ['products','สินค้า'],
+  ['ads','ADS อัพเดต'],
   ['promo','โปรโมชัน',()=>DB.promos.filter(p=>promoS(p)==='live').length],
   ['decks','Presentation',()=>DB.decks.filter(isNew).length],
   ['apps','แอป'],
@@ -1581,20 +1582,32 @@ const VIEWS = {
     ${grid(pick(sortedPromos(),'promo',promoS),promoCard,'โปรในสถานะนี้')}`;
   },
   ads(){
-    const thisM = TODAY().slice(0,7);
-    if(!filt.adsMonth) filt.adsMonth = thisM;
-    const mLabel = m => parse(m+'-01').toLocaleDateString('th-TH',{month:'short',year:'2-digit'});
-    const inMonth = (a,m) => String(a.start||'') <= m+'-31' && String(a.end||a.start||'') >= m+'-01';
-    const ms = new Set([thisM]);
-    for(const a of DB.ads){ if(!a.start) continue; const d = parse(a.start), e = parse(a.end||a.start); d.setDate(1); let n = 0;
-      while(d <= e && n++ < 24){ ms.add(iso(d).slice(0,7)); d.setMonth(d.getMonth()+1); } }
-    const months = [...ms].sort().reverse().slice(0,12);
-    const cur = filt.adsMonth;
-    const list = sortedAds().filter(a => cur==='all' || inMonth(a,cur));
-    const live = list.filter(a=>adS(a)==='live').length;
-    return `${statusNotice()}<div class="sec-h"><h2>ADS และแคมเปญ${cur!=='all'?` · ${mLabel(cur)}`:''}</h2><div class="sec-tools">${filterBar('adsMonth',[...months.map(m=>[m, m===thisM?`เดือนนี้ (${mLabel(m)})`:mLabel(m)]),['all','ทุกเดือน']])}${addBtn('ads','ADS')}</div></div>
-    ${list.length?`<p class="meta" style="margin:0;font-size:14px">${cur==='all'?'ทุกเดือน':mLabel(cur)} มี ${list.length} ชุด · กำลังยิง ${live} ชุด</p>`:''}
-    ${grid(list,adCard,cur==='all'?' ADS':` ADS ในเดือน ${mLabel(cur)}`)}`;
+    const cats = ['เซตชนะเอลนีโญ', 'เซต ขวด 1 ลิตร', 'เซต ถัง 20 ลิตร'];
+    const cur = filt.adsSet || 'all';
+    const filterOptions = [
+      ['all', 'ทั้งหมด'],
+      ['เซตชนะเอลนีโญ', 'เซตชนะเอลนีโญ'],
+      ['เซต ขวด 1 ลิตร', 'เซต ขวด 1 ลิตร'],
+      ['เซต ถัง 20 ลิตร', 'เซตถัง 20 ลิตร']
+    ];
+    const sortSet = (list, cat) => {
+      if(cat === 'เซตชนะเอลนีโญ'){
+        const o = {'set-mini': 1, 'set-premium': 2, 'set-extra': 3};
+        return [...list].sort((a,b) => (o[a.id]||9) - (o[b.id]||9));
+      }
+      return [...list].sort((a,b) => (pRank(a)-pRank(b)) || String(a.name).localeCompare(b.name,'th'));
+    };
+    return `${statusNotice()}<div class="sec-h"><h2>ADS อัพเดต · เซตยอดนิยมจากโฆษณา</h2><div class="sec-tools">${filterBar('adsSet', filterOptions)}${EDIT?`<button class="btn pri sm" data-add="products" data-cat="เซตชนะเอลนีโญ">+ เพิ่มเซต</button>`:''}</div></div>
+    <p class="meta" style="margin:-4px 0 14px;font-size:14px">รวมเซตสินค้าที่ยิงโฆษณา สำหรับตอบลูกค้าและส่งสคริปต์ปิดการขายทันที</p>
+    ${cur === 'all' ? cats.map(c => {
+      const prods = sortSet(DB.products.filter(p => p.cat === c).filter(match), c);
+      if(!prods.length) return '';
+      const icon = c === 'เซตชนะเอลนีโญ' ? '🔥' : c === 'เซต ขวด 1 ลิตร' ? '🧴' : '🛢️';
+      return `<section><h3 class="ghead">${icon} ${esc(c)} <span class="chip plain">${prods.length} เซต</span></h3><div class="grid">${prods.map(productCard).join('')}</div></section>`;
+    }).join('') : (() => {
+      const prods = sortSet(DB.products.filter(p => p.cat === cur).filter(match), cur);
+      return grid(prods, productCard, cur);
+    })()}`;
   },
   products(){
     const prods = DB.products.filter(p=>!isAppP(p));
@@ -1626,10 +1639,6 @@ const VIEWS = {
     ${grouped ? cats.map(c=>{ const it = list.filter(x=>(x.cat||'')===c).filter(match); return it.length ? `<section><h3 class="ghead">${esc(c||'อื่นๆ')} <span class="chip plain">${it.length}</span></h3><div class="grid">${it.map(qaCard).join('')}</div></section>` : ''; }).join('') : grid(pick(list,'qa',x=>x.cat),qaCard,'สคริปต์ถาม-ตอบ')}`;
   },
   plan(){
-    if(!EDIT){
-      location.hash = 'home';
-      return VIEWS.home();
-    }
     const t = today(); const mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay()+6)%7) + calOffset*7);
     const days = [...Array(14)].map((_,i)=>{ const d = new Date(mon); d.setDate(mon.getDate()+i); return d; });
     const wd = ['จ.','อ.','พ.','พฤ.','ศ.','ส.','อา.'];
@@ -1681,7 +1690,7 @@ function searchView(){
     ['สคริปต์ขาย', DB.qa.filter(match).sort((a,b)=>qaRank(a.cat)-qaRank(b.cat)), qaCard],
     ['แอป', DB.products.filter(p=>isAppP(p) && !(/ใบพืช/.test(p.cat||'') && p.id!=='app-home')).filter(match), productCard],
     ['โพสต์ที่ลงเพจแล้ว', postedList().filter(match), postCard],
-    ...(EDIT ? [['แผนเนื้อหา', DB.plan.filter(p=>p.status!=='live').filter(match), planMini]] : []),
+    ['แผนเนื้อหา', DB.plan.filter(p=>p.status!=='live').filter(match), planMini],
   ];
   const total = groups.reduce((n,g)=>n+g[1].length,0);
   return `<section class="hello"><h1 style="font-size:22px">ผลการค้นหา "${esc(Q)}"</h1><div class="row" style="align-items:center"><span class="meta" style="font-size:14px">พบ ${total} รายการจากทุกหมวด</span><button class="btn sm" data-act="clearQ">ล้างคำค้น</button></div></section>
@@ -2125,7 +2134,7 @@ document.getElementById('lbCopy').onclick = async () => {
 
 /* ===================== เหตุการณ์ ===================== */
 const view = document.getElementById('view'), tabs = document.getElementById('tabs');
-const navTabs = () => TABS.filter(([k]) => EDIT || (k!=='apps' && k!=='plan'));
+const navTabs = () => TABS;
 const TS = {home:'หน้าแรก',promo:'โปร',ads:'ADS',products:'สินค้า',apps:'แอป',decks:'สไลด์',qa:'สคริปต์',plan:'แผนงาน'};
 const TI = {
   home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -2344,7 +2353,7 @@ function homeV2(){
   const recentDecks = [...DB.decks].sort((a,b)=>String(b.date).localeCompare(a.date)).slice(0,3);
   return `${homeTop()}${statusNotice()}${notifyBox()}
   <section><div class="sec-h"><h2>โปรที่ใช้ได้วันนี้</h2><a href="#promo">ดูทั้งหมด</a></div>${grid(lp,promoCard,'โปรที่ใช้ได้ตอนนี้')}</section>
-  ${postedList().length || EDIT ? `<section><div class="sec-h"><h2>โพสต์ล่าสุดจากเพจ</h2><div class="sec-tools">${addPostBtn()}${EDIT?`<a href="#plan" style="font-size:13px;text-decoration:none;font-weight:500">ดูทั้งหมด</a>`:''}</div></div>${postFilterBar()}${postsBlock(postedFiltered(),6)}</section>` : ''}
+  ${postedList().length || EDIT ? `<section><div class="sec-h"><h2>โพสต์ล่าสุดจากเพจ</h2><div class="sec-tools">${addPostBtn()}<a href="#plan" style="font-size:13px;text-decoration:none;font-weight:500">ดูทั้งหมด</a></div></div>${postFilterBar()}${postsBlock(postedFiltered(),6)}</section>` : ''}
   
   <section class="learn"><div class="sec-h"><h2>เรียนรู้โปรแกรมปุ๋ยอ้อย จากรากถึงยอด</h2></div>${heroWorld()}</section>
   <section><div class="sec-h"><h2>Presentation ล่าสุด</h2><a href="#decks">ดูทั้งหมด</a></div>${grid(recentDecks,deckCard,'Presentation')}</section>
@@ -2361,6 +2370,10 @@ document.addEventListener('keydown', e => { if(e.key==='/' && !/INPUT|TEXTAREA|S
 /* ===================== ลูกเล่นทุกหน้า ===================== */
 function band(tab){
   const B = (cls, inner, t, sub) => `<section class="band band-${cls}" data-band>${BD_HTML}<div class="band-in"><div class="band-copy"><h1>${t}</h1>${sub?`<p>${sub}</p>`:''}</div>${inner}</div></section>`;
+  if(tab==='ads'){
+    const count = DB.products.filter(p=>/เซต/.test(p.cat||'')).length;
+    return B('promo', `<div class="mq"><div class="mq-w"><div class="mq-t"><span>เซตชนะเอลนีโญ</span><i>●</i><span>เซตขวด 1 ลิตร</span><i>●</i><span>เซตถัง 20 ลิตร</span><i>●</i><span>เซตชนะเอลนีโญ</span><i>●</i><span>เซตขวด 1 ลิตร</span><i>●</i><span>เซตถัง 20 ลิตร</span><i>●</i></div></div></div>`, 'ADS อัพเดต', `${count} เซตยอดนิยมจากโฆษณา · เซตชนะเอลนีโญ, ขวด 1 ลิตร, ถัง 20 ลิตร`);
+  }
   if(tab==='promo'){
     const live = DB.promos.filter(p=>promoS(p)==='live');
     const words = (live.length ? live : DB.promos).map(p=>p.offer||p.title).filter(Boolean).slice(0,8);
