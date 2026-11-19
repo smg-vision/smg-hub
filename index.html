@@ -812,7 +812,6 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
       <button class="btn sm" type="button" id="btnImport">นำเข้าจากไฟล์</button>
       <button class="btn sm" type="button" id="btnSample">ใส่ข้อมูลตัวอย่าง</button>
       <button class="btn sm danger" type="button" id="btnClear">ล้างข้อมูลทั้งหมด</button>
-      <button class="btn sm" type="button" id="btnLockAdmin">🔒 ซ่อนโหมดแก้ไข</button>
       <input type="file" id="fileIn" accept=".json,application/json" hidden>
     </div>
   </div>
@@ -1167,20 +1166,7 @@ let renderQueued = false;
 function scheduleRender(){ if(renderQueued) return; renderQueued = true; requestAnimationFrame(()=>{ renderQueued = false; route(); }); }
 
 function checkAdminAccess(){
-  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname) || location.protocol === 'file:';
-  try {
-    const urlParams = new URLSearchParams(location.search);
-    if(urlParams.get('admin') === '1' || urlParams.get('edit') === '1'){
-      store.set('smg-admin', '1');
-      const cleanUrl = location.pathname + location.hash;
-      history.replaceState(null, '', cleanUrl);
-    } else if(urlParams.get('admin') === '0'){
-      store.set('smg-admin', '0');
-      store.set('mh-edit', '0');
-    }
-  } catch(e) {}
-  const hasAdmin = store.get('smg-admin') === '1';
-  return isLocal || hasAdmin;
+  return true;
 }
 
 async function boot(){
@@ -1462,7 +1448,7 @@ function notifyBox(){
   const {list, isNew} = latestUpd(), nw = list;
   if(!nw.length) return '';
   return `<section class="notify" role="status"><div class="notify-h"><span class="bell" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><b>${isNew?`มีอัปเดตใหม่ ${nw.length} รายการ`:`อัปเดตล่าสุด ${fmtY(nw[0].date)}`}</b><span class="meta">${isNew?'ตั้งแต่เข้ามาครั้งก่อน':''}</span></div>
-    <ul>${nw.slice(0,6).map(u=>`<li>${TABS.some(t=>t[0]===u.tab)&&u.tab!=='home'?`<a href="#${u.tab}">${esc(u.what)}</a>`:esc(u.what)}</li>`).join('')}${nw.length>6?`<li class="meta">และอีก ${nw.length-6} รายการด้านล่าง</li>`:''}</ul>
+    <ul>${nw.slice(0,6).map(u=>`<li>${TABS.some(t=>t[0]===u.tab)&&u.tab!=='home'&&(EDIT||u.tab!=='plan')?`<a href="#${u.tab}">${esc(u.what)}</a>`:esc(u.what)}</li>`).join('')}${nw.length>6?`<li class="meta">และอีก ${nw.length-6} รายการด้านล่าง</li>`:''}</ul>
     ${isNew?`<div class="row"><button class="btn sm pri" data-act="seen">รับทราบแล้ว</button></div>`:''}</section>`;
 }
 
@@ -1564,10 +1550,10 @@ const TABS = [
   ['home','หน้าแรก',()=>unseen().length],
   ['products','สินค้า'],
   ['promo','โปรโมชัน',()=>DB.promos.filter(p=>promoS(p)==='live').length],
-  ['qa','สคริปต์ขาย'],
   ['decks','Presentation',()=>DB.decks.filter(isNew).length],
   ['apps','แอป'],
   ['plan','แผนเนื้อหา'],
+  ['qa','สคริปต์ขาย'],
 ];
 const VIEWS = {
   home(){
@@ -1640,6 +1626,10 @@ const VIEWS = {
     ${grouped ? cats.map(c=>{ const it = list.filter(x=>(x.cat||'')===c).filter(match); return it.length ? `<section><h3 class="ghead">${esc(c||'อื่นๆ')} <span class="chip plain">${it.length}</span></h3><div class="grid">${it.map(qaCard).join('')}</div></section>` : ''; }).join('') : grid(pick(list,'qa',x=>x.cat),qaCard,'สคริปต์ถาม-ตอบ')}`;
   },
   plan(){
+    if(!EDIT){
+      location.hash = 'home';
+      return VIEWS.home();
+    }
     const t = today(); const mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay()+6)%7) + calOffset*7);
     const days = [...Array(14)].map((_,i)=>{ const d = new Date(mon); d.setDate(mon.getDate()+i); return d; });
     const wd = ['จ.','อ.','พ.','พฤ.','ศ.','ส.','อา.'];
@@ -1686,12 +1676,12 @@ const planMini = e => `<article class="card"><div class="meta">${chip(e.status,P
 function searchView(){
   const groups = [
     ['สินค้า', DB.products.filter(p=>!isAppP(p)).filter(match).sort((a,b)=>pRank(a)-pRank(b)), productCard],
-    ['สคริปต์ขาย', DB.qa.filter(match).sort((a,b)=>qaRank(a.cat)-qaRank(b.cat)), qaCard],
     ['โปรโมชัน', sortedPromos().filter(match), promoCard],
-    ['แอป', DB.products.filter(p=>isAppP(p) && !(/ใบพืช/.test(p.cat||'') && p.id!=='app-home')).filter(match), productCard],
     ['Presentation', DB.decks.filter(match), deckCard],
+    ['สคริปต์ขาย', DB.qa.filter(match).sort((a,b)=>qaRank(a.cat)-qaRank(b.cat)), qaCard],
+    ['แอป', DB.products.filter(p=>isAppP(p) && !(/ใบพืช/.test(p.cat||'') && p.id!=='app-home')).filter(match), productCard],
     ['โพสต์ที่ลงเพจแล้ว', postedList().filter(match), postCard],
-    ['แผนเนื้อหา', DB.plan.filter(p=>p.status!=='live').filter(match), planMini],
+    ...(EDIT ? [['แผนเนื้อหา', DB.plan.filter(p=>p.status!=='live').filter(match), planMini]] : []),
   ];
   const total = groups.reduce((n,g)=>n+g[1].length,0);
   return `<section class="hello"><h1 style="font-size:22px">ผลการค้นหา "${esc(Q)}"</h1><div class="row" style="align-items:center"><span class="meta" style="font-size:14px">พบ ${total} รายการจากทุกหมวด</span><button class="btn sm" data-act="clearQ">ล้างคำค้น</button></div></section>
@@ -2354,7 +2344,7 @@ function homeV2(){
   const recentDecks = [...DB.decks].sort((a,b)=>String(b.date).localeCompare(a.date)).slice(0,3);
   return `${homeTop()}${statusNotice()}${notifyBox()}
   <section><div class="sec-h"><h2>โปรที่ใช้ได้วันนี้</h2><a href="#promo">ดูทั้งหมด</a></div>${grid(lp,promoCard,'โปรที่ใช้ได้ตอนนี้')}</section>
-  ${postedList().length || EDIT ? `<section><div class="sec-h"><h2>โพสต์ล่าสุดจากเพจ</h2><div class="sec-tools">${addPostBtn()}<a href="#plan" style="font-size:13px;text-decoration:none;font-weight:500">ดูทั้งหมด</a></div></div>${postFilterBar()}${postsBlock(postedFiltered(),6)}</section>` : ''}
+  ${postedList().length || EDIT ? `<section><div class="sec-h"><h2>โพสต์ล่าสุดจากเพจ</h2><div class="sec-tools">${addPostBtn()}${EDIT?`<a href="#plan" style="font-size:13px;text-decoration:none;font-weight:500">ดูทั้งหมด</a>`:''}</div></div>${postFilterBar()}${postsBlock(postedFiltered(),6)}</section>` : ''}
   
   <section class="learn"><div class="sec-h"><h2>เรียนรู้โปรแกรมปุ๋ยอ้อย จากรากถึงยอด</h2></div>${heroWorld()}</section>
   <section><div class="sec-h"><h2>Presentation ล่าสุด</h2><a href="#decks">ดูทั้งหมด</a></div>${grid(recentDecks,deckCard,'Presentation')}</section>
@@ -2472,14 +2462,14 @@ document.getElementById('btnSocial').onclick = () => openSocial();
 document.getElementById('btnLine').onclick = () => openLineNotify();
 document.getElementById('btnSample').onclick = loadSample;
 document.getElementById('btnClear').onclick = () => clearWhere(()=>true, 'ล้างข้อมูลทั้งหมด?', 'ทุกรายการและรูปภาพจะหายไปสำหรับทุกคน และกู้คืนไม่ได้ แนะนำให้กด "ส่งออกสำรอง" ก่อน', 'ล้างทั้งหมด');
-document.getElementById('btnLockAdmin').onclick = () => {
-  store.set('smg-admin', '0');
-  store.set('mh-edit', '0');
-  CAN_EDIT = checkAdminAccess();
-  EDIT = false;
-  route();
-  toast('🔒 ล็อกและซ่อนปุ่มโหมดแก้ไขเรียบร้อยแล้ว');
-};
+if(document.getElementById('btnLockAdmin')){
+  document.getElementById('btnLockAdmin').onclick = () => {
+    store.set('mh-edit', '0');
+    EDIT = false;
+    route();
+    toast('🔒 ปิดโหมดแก้ไขเรียบร้อยแล้ว');
+  };
+}
 let brandClicks = 0, brandTimer;
 document.querySelector('.brand')?.addEventListener('click', () => {
   brandClicks++;
