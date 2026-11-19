@@ -789,7 +789,7 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
 <header>
   <div class="wrap">
     <div class="top">
-      <div class="brand">
+      <div class="brand" role="button" aria-label="Smart Green Hub" style="cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;" title="SMG Hub">
         <div class="mark logo"><img src="./images/b2e91d2cf9fbd06c480fb6ad682be9d3" alt="Smart Green"></div>
         <div><b class="hubname">SMG <span>Hub</span></b><small>คลังข้อมูล<span class="bs">สมาร์ท</span><span class="bg">กรีน</span> · หาอะไรก็เจอ</small></div>
       </div>
@@ -812,6 +812,7 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
       <button class="btn sm" type="button" id="btnImport">นำเข้าจากไฟล์</button>
       <button class="btn sm" type="button" id="btnSample">ใส่ข้อมูลตัวอย่าง</button>
       <button class="btn sm danger" type="button" id="btnClear">ล้างข้อมูลทั้งหมด</button>
+      <button class="btn sm" type="button" id="btnLockAdmin" style="margin-left:auto;border-color:rgb(255 255 255 / .4)">🔒 ล็อก/ซ่อนโหมดแก้ไข</button>
       <input type="file" id="fileIn" accept=".json,application/json" hidden>
     </div>
   </div>
@@ -970,7 +971,7 @@ const DEFAULTS = {
 /* ===================== ระบบฐานข้อมูล Standalone (data.json & LocalStorage) ===================== */
 const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
 const DB = {products:[],promos:[],ads:[],decks:[],plan:[],qa:[],updates:[],social:{}};
-let CAN_EDIT = true, STATE = 'loading';
+let CAN_EDIT = false, STATE = 'loading';
 let EDIT = false, Q = '', filt = {}, calOffset = 0;
 const loaded = new Set();
 const ASSET_ID = /^[A-Za-z0-9_-]{8,64}$/;
@@ -1186,7 +1187,7 @@ let renderQueued = false;
 function scheduleRender(){ if(renderQueued) return; renderQueued = true; requestAnimationFrame(()=>{ renderQueued = false; route(); }); }
 
 function checkAdminAccess(){
-  return true;
+  return store.get('smg-admin') === '1';
 }
 
 async function boot(){
@@ -2571,30 +2572,47 @@ document.getElementById('btnSample').onclick = loadSample;
 document.getElementById('btnClear').onclick = () => clearWhere(()=>true, 'ล้างข้อมูลทั้งหมด?', 'ทุกรายการและรูปภาพจะหายไปสำหรับทุกคน และกู้คืนไม่ได้ แนะนำให้กด "ส่งออกสำรอง" ก่อน', 'ล้างทั้งหมด');
 if(document.getElementById('btnLockAdmin')){
   document.getElementById('btnLockAdmin').onclick = () => {
+    store.set('smg-admin', '0');
     store.set('mh-edit', '0');
+    CAN_EDIT = false;
     EDIT = false;
     route();
-    toast('🔒 ปิดโหมดแก้ไขเรียบร้อยแล้ว');
+    toast('🔒 ล็อกและซ่อนโหมดแก้ไขเรียบร้อยแล้ว (กดรูปโลโก้ 4 ครั้งเพื่อปลดล็อก)');
   };
 }
 let brandClicks = 0, brandTimer;
-document.querySelector('.brand')?.addEventListener('click', () => {
-  brandClicks++;
-  clearTimeout(brandTimer);
-  brandTimer = setTimeout(() => { brandClicks = 0; }, 2000);
-  if(brandClicks >= 5){
-    brandClicks = 0;
-    const pin = prompt('รหัสผ่านเปิดโหมดแก้ไข (รหัส: 1234):');
-    if(pin === '1234' || pin === 'smg' || pin === 'smg2026'){
-      store.set('smg-admin', '1');
-      CAN_EDIT = true;
-      setEdit(true);
-      toast('🔓 ปลดล็อกโหมดแก้ไขเรียบร้อยแล้ว!');
-    } else if(pin !== null){
-      toast('รหัสผ่านไม่ถูกต้อง');
+const brandEl = document.querySelector('.brand');
+if(brandEl){
+  brandEl.addEventListener('click', () => {
+    brandClicks++;
+    clearTimeout(brandTimer);
+    brandTimer = setTimeout(() => { brandClicks = 0; }, 3000);
+    if(brandClicks >= 4){
+      brandClicks = 0;
+      if(CAN_EDIT){
+        const opt = confirm('คุณอยู่ในโหมดแก้ไขอยู่แล้ว\nต้องการ "ล็อกและซ่อนโหมดแก้ไข" หรือไม่?');
+        if(opt){
+          store.set('smg-admin', '0');
+          store.set('mh-edit', '0');
+          CAN_EDIT = false;
+          EDIT = false;
+          route();
+          toast('🔒 ล็อกและซ่อนโหมดแก้ไขเรียบร้อยแล้ว');
+        }
+        return;
+      }
+      const pin = prompt('กรุณากรอกรหัสผ่านเพื่อเข้าสู่โหมดแก้ไข:');
+      if(pin && pin.trim() === '11111'){
+        store.set('smg-admin', '1');
+        CAN_EDIT = true;
+        setEdit(true);
+        toast('🔓 ปลดล็อกโหมดแก้ไขเรียบร้อยแล้ว!');
+      } else if(pin !== null){
+        toast('รหัสผ่านไม่ถูกต้อง');
+      }
     }
-  }
-});
+  });
+}
 document.getElementById('fileIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if(f) importFile(f); });
 
 view.addEventListener('click', e => {
