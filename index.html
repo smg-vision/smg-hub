@@ -2093,17 +2093,76 @@ pvTrack.addEventListener('click', e => {
   if(k < .28) pvGo(pvIdx-1, true); else if(k > .72) pvGo(pvIdx+1, true); else if(pv.classList.contains('hide-ui')) pvPoke(); else { clearTimeout(pvT); pv.classList.add('hide-ui'); }
 });
 pv.addEventListener('keydown', e => { if(e.key==='ArrowLeft'){ e.preventDefault(); pvGo(pvIdx-1, true); } if(e.key==='ArrowRight'){ e.preventDefault(); pvGo(pvIdx+1, true); } });
+async function exportHdImageBlob(img){
+  if(!img.complete) await img.decode().catch(()=>{});
+  const natW = img.naturalWidth || img.width || 1200;
+  const natH = img.naturalHeight || img.height || 1200;
+  const maxDim = Math.max(natW, natH);
+
+  const render = (w, h, q, mime='image/jpeg') => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(w);
+    c.height = Math.round(h);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return new Promise(res => c.toBlob(res, mime, q));
+  };
+
+  const MIN_BYTES = 800 * 1024; // 800 KB
+
+  // 1. Initial attempt: target ~2400px on longest side with quality 0.96
+  let target = Math.max(2400, maxDim);
+  let scale = target / maxDim;
+  let blob = await render(natW * scale, natH * scale, 0.96);
+
+  if(blob && blob.size >= MIN_BYTES) {
+    return { blob, ext: 'jpg' };
+  }
+
+  // 2. Scale up to 3000px and quality 0.985
+  target = Math.max(3000, target * 1.25);
+  scale = target / maxDim;
+  let blob2 = await render(natW * scale, natH * scale, 0.985);
+  if(blob2 && blob2.size >= MIN_BYTES) {
+    return { blob: blob2, ext: 'jpg' };
+  }
+
+  // 3. Scale up to 3400px and quality 0.995
+  target = Math.max(3400, target * 1.2);
+  scale = target / maxDim;
+  let blob3 = await render(natW * scale, natH * scale, 0.995);
+  if(blob3 && blob3.size >= MIN_BYTES) {
+    return { blob: blob3, ext: 'jpg' };
+  }
+
+  // 4. Try PNG (~1MB - 2MB)
+  let blobPng = await render(natW * Math.max(1.8, 2200 / maxDim), natH * Math.max(1.8, 2200 / maxDim), 1.0, 'image/png');
+  if(blobPng && blobPng.size >= MIN_BYTES) {
+    return { blob: blobPng, ext: 'png' };
+  }
+
+  return { blob: (blob3 && blob3.size > (blob2?.size||0)) ? blob3 : (blob2 || blob || blobPng), ext: 'jpg' };
+}
+
 document.getElementById('pvDl').onclick = async () => {
   if(!dlApi || !pvItem) return;
+  const btn = document.getElementById('pvDl');
+  btn.disabled = true;
+  btn.textContent = 'กำลังเตรียม HD…';
   try{
-    const img = pvTrack.children[pvIdx].firstElementChild; if(!img.complete) await img.decode();
-    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0);
-    const blob = await new Promise((res,rej) => c.toBlob(b => b ? res(b) : rej(), 'image/jpeg', .92));
+    const img = pvTrack.children[pvIdx].firstElementChild;
+    const { blob, ext } = await exportHdImageBlob(img);
     const name = String(pvItem.title||'สไลด์').replace(/[\\/:*?"<>|]/g,'').slice(0,60);
-    await dlApi.save({filename:`${name}-หน้า${pvIdx+1}.jpg`, data:blob});
-    toast('บันทึกรูปแล้ว');
+    await dlApi.save({filename:`${name}-หน้า${pvIdx+1}.${ext}`, data:blob});
+    const szKb = Math.round(blob.size / 1024);
+    const szMb = (blob.size / (1024 * 1024)).toFixed(2);
+    toast(`บันทึกรูป HD คมชัดแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})`);
   }catch(e){ if(e?.code!=='declined') toast('บันทึกรูปไม่ได้ในตอนนี้'); }
+  finally{ btn.disabled = false; btn.textContent = 'บันทึกหน้านี้'; }
 };
 function imgToBlob(type){
   const img = document.getElementById('lbImg'), c = document.createElement('canvas');
@@ -2117,12 +2176,19 @@ lb.addEventListener('click', e => { if(e.target === lb) lb.close(); });
 lb.addEventListener('keydown', e => { if(e.key==='ArrowLeft'){ lbIdx--; showLb(); } if(e.key==='ArrowRight'){ lbIdx++; showLb(); } });
 document.getElementById('lbDl').onclick = async () => {
   if(!dlApi) return;
+  const btn = document.getElementById('lbDl');
+  btn.disabled = true;
+  btn.textContent = 'กำลังเตรียมรูป HD…';
   try{
-    const blob = await imgToBlob('image/jpeg');
-    const name = String(lbItem.name).replace(/[\\/:*?"<>|]/g,'').slice(0,60) || 'รูป';
-    await dlApi.save({filename:`${name}-${lbIdx+1}.jpg`, data:blob});
-    toast('บันทึกรูปแล้ว');
+    const img = document.getElementById('lbImg');
+    const { blob, ext } = await exportHdImageBlob(img);
+    const name = String(lbItem.name||'รูป').replace(/[\\/:*?"<>|]/g,'').slice(0,60) || 'รูป';
+    await dlApi.save({filename:`${name}-${lbIdx+1}.${ext}`, data:blob});
+    const szKb = Math.round(blob.size / 1024);
+    const szMb = (blob.size / (1024 * 1024)).toFixed(2);
+    toast(`ดาวน์โหลดรูป HD คมชัดแล้ว (${szMb >= 1 ? szMb + ' MB' : szKb + ' KB'})`);
   }catch(e){ if(e?.code!=='declined') toast('ดาวน์โหลดรูปไม่ได้ในตอนนี้'); }
+  finally{ btn.disabled = false; btn.textContent = 'ดาวน์โหลดรูป'; }
 };
 document.getElementById('lbCopy').onclick = async () => {
   try{
