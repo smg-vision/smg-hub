@@ -796,6 +796,7 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
       <button class="btn sm" type="button" id="btnImport">นำเข้าจากไฟล์</button>
       <button class="btn sm" type="button" id="btnSample">ใส่ข้อมูลตัวอย่าง</button>
       <button class="btn sm danger" type="button" id="btnClear">ล้างข้อมูลทั้งหมด</button>
+      <button class="btn sm" type="button" id="btnLockAdmin">🔒 ซ่อนโหมดแก้ไข</button>
       <input type="file" id="fileIn" accept=".json,application/json" hidden>
     </div>
   </div>
@@ -1149,11 +1150,28 @@ function cleanItem(id, d){
 let renderQueued = false;
 function scheduleRender(){ if(renderQueued) return; renderQueued = true; requestAnimationFrame(()=>{ renderQueued = false; route(); }); }
 
+function checkAdminAccess(){
+  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname) || location.protocol === 'file:';
+  try {
+    const urlParams = new URLSearchParams(location.search);
+    if(urlParams.get('admin') === '1' || urlParams.get('edit') === '1'){
+      store.set('smg-admin', '1');
+      const cleanUrl = location.pathname + location.hash;
+      history.replaceState(null, '', cleanUrl);
+    } else if(urlParams.get('admin') === '0'){
+      store.set('smg-admin', '0');
+      store.set('mh-edit', '0');
+    }
+  } catch(e) {}
+  const hasAdmin = store.get('smg-admin') === '1';
+  return isLocal || hasAdmin;
+}
+
 async function boot(){
+  CAN_EDIT = checkAdminAccess();
+  EDIT = CAN_EDIT && store.get('mh-edit') === '1';
   route();
   dbApi = SmgDB;
-  CAN_EDIT = true;
-  EDIT = store.get('mh-edit') === '1';
 
   try {
     const ok = await SmgDB.init();
@@ -2438,6 +2456,32 @@ document.getElementById('btnSocial').onclick = () => openSocial();
 document.getElementById('btnLine').onclick = () => openLineNotify();
 document.getElementById('btnSample').onclick = loadSample;
 document.getElementById('btnClear').onclick = () => clearWhere(()=>true, 'ล้างข้อมูลทั้งหมด?', 'ทุกรายการและรูปภาพจะหายไปสำหรับทุกคน และกู้คืนไม่ได้ แนะนำให้กด "ส่งออกสำรอง" ก่อน', 'ล้างทั้งหมด');
+document.getElementById('btnLockAdmin').onclick = () => {
+  store.set('smg-admin', '0');
+  store.set('mh-edit', '0');
+  CAN_EDIT = checkAdminAccess();
+  EDIT = false;
+  route();
+  toast('🔒 ล็อกและซ่อนปุ่มโหมดแก้ไขเรียบร้อยแล้ว');
+};
+let brandClicks = 0, brandTimer;
+document.querySelector('.brand')?.addEventListener('click', () => {
+  brandClicks++;
+  clearTimeout(brandTimer);
+  brandTimer = setTimeout(() => { brandClicks = 0; }, 2000);
+  if(brandClicks >= 5){
+    brandClicks = 0;
+    const pin = prompt('รหัสผ่านเปิดโหมดแก้ไข (รหัส: 1234):');
+    if(pin === '1234' || pin === 'smg' || pin === 'smg2026'){
+      store.set('smg-admin', '1');
+      CAN_EDIT = true;
+      setEdit(true);
+      toast('🔓 ปลดล็อกโหมดแก้ไขเรียบร้อยแล้ว!');
+    } else if(pin !== null){
+      toast('รหัสผ่านไม่ถูกต้อง');
+    }
+  }
+});
 document.getElementById('fileIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if(f) importFile(f); });
 
 view.addEventListener('click', e => {
