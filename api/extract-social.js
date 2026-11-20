@@ -23,21 +23,55 @@ function extractMeta(html, prop) {
 }
 
 async function handleFacebook(url) {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
-    },
-    redirect: 'follow'
-  });
-  const html = await res.text();
+  let html = '';
+  let finalUrl = url;
 
-  const titleTag = html.match(/<title>(.*?)<\/title>/is);
+  // 1. Try Desktop Chrome fetch first (contains creation_time and full GraphQL payload)
+  try {
+    const desktopRes = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1'
+      },
+      redirect: 'follow'
+    });
+    if (desktopRes.ok) {
+      html = await desktopRes.text();
+      finalUrl = desktopRes.url;
+    }
+  } catch (e) {}
+
+  // 2. Fallback to Facebook External Hit crawler if desktop fetch blocked or too small
+  let crawlerHtml = '';
+  if (!html || html.length < 5000 || !extractMeta(html, 'og:description')) {
+    try {
+      const crawlerRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+        },
+        redirect: 'follow'
+      });
+      if (crawlerRes.ok) {
+        crawlerHtml = await crawlerRes.text();
+        if (!finalUrl || finalUrl === url) finalUrl = crawlerRes.url;
+      }
+    } catch (e) {}
+  }
+
+  const combinedHtml = (html || '') + ' ' + (crawlerHtml || '');
+
+  const titleTag = combinedHtml.match(/<title>(.*?)<\/title>/is);
   let rawTitle = titleTag ? decodeEntities(titleTag[1].trim()) : '';
   let cleanTitle = rawTitle.replace(/^(สมาร์ทกรีน\s*[-·]\s*)|(\s*\|\s*Facebook.*)$/g, '').trim();
 
-  let descOg = extractMeta(html, 'og:description');
-  let descMeta = extractMeta(html, 'description');
-  let descTw = extractMeta(html, 'twitter:description');
+  let descOg = extractMeta(combinedHtml, 'og:description');
+  let descMeta = extractMeta(combinedHtml, 'description');
+  let descTw = extractMeta(combinedHtml, 'twitter:description');
   let candidates = [descOg, descMeta, descTw].filter(Boolean);
   let desc = candidates.length ? candidates.reduce((a, b) => a.length >= b.length ? a : b) : '';
 
@@ -45,13 +79,14 @@ async function handleFacebook(url) {
     let lines = desc.split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length) cleanTitle = lines[0];
   } else if (!cleanTitle || cleanTitle.toLowerCase() === 'facebook') {
-    cleanTitle = extractMeta(html, 'og:title') || 'โพสต์จากเพจ สมาร์ทกรีน';
+    cleanTitle = extractMeta(combinedHtml, 'og:title') || 'โพสต์จากเพจ สมาร์ทกรีน';
   }
 
-  const imgUrl = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image');
+  const imgUrl = extractMeta(combinedHtml, 'og:image') || extractMeta(combinedHtml, 'twitter:image');
 
+  // Extract date from creation_time / publish_time
   let postDate = '';
-  const ctimes = html.match(/["'](?:creation_time|publish_time|story_time)["']\s*:\s*(\d+)/);
+  const ctimes = combinedHtml.match(/["'](?:creation_time|publish_time|story_time)["']\s*:\s*(\d+)/);
   if (ctimes) {
     try {
       const ts = parseInt(ctimes[1]);
@@ -98,8 +133,17 @@ async function handleFacebook(url) {
 }
 
 async function handleTikTok(url) {
+  let vidId = '';
   const vidMatch = url.match(/\/video\/(\d+)/);
-  const vidId = vidMatch ? vidMatch[1] : '';
+  if (vidMatch) {
+    vidId = vidMatch[1];
+  } else {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' });
+      const m = r.url.match(/\/video\/(\d+)/);
+      if (m) vidId = m[1];
+    } catch (e) {}
+  }
 
   let postDate = '';
   if (vidId) {
