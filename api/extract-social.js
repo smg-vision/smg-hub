@@ -133,20 +133,185 @@ async function handleFacebook(url) {
 }
 
 async function handleTikTok(url) {
+  let targetUrl = url;
   let vidId = '';
   const vidMatch = url.match(/\/video\/(\d+)/);
   if (vidMatch) {
     vidId = vidMatch[1];
   } else {
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' });
-      const m = r.url.match(/\/video\/(\d+)/);
-      if (m) vidId = m[1];
+      const r = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0' },
+        redirect: 'follow'
+      });
+      if (r.url) {
+        targetUrl = r.url;
+        const m = r.url.match(/\/video\/(\d+)/);
+        if (m) vidId = m[1];
+      }
     } catch (e) {}
   }
 
+  let title = '';
+  let caption = '';
+  let imgUrl = '';
+  let embedHtml = '';
+  let createTime = null;
+
+  // 1. Try Direct Desktop Firefox Fetch (Extracts __UNIVERSAL_DATA_FOR_REHYDRATION__)
+  try {
+    const pageRes = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1'
+      },
+      redirect: 'follow'
+    });
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      // Try __UNIVERSAL_DATA_FOR_REHYDRATION__
+      const uMatch = html.match(/<script[^>]+id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)<\/script>/s);
+      if (uMatch) {
+        try {
+          const uData = JSON.parse(uMatch[1]);
+          const defaultScope = uData['__DEFAULT_SCOPE__'] || {};
+          const videoDetail = defaultScope['webapp.video-detail'] || {};
+          const itemStruct = videoDetail.itemInfo?.itemStruct;
+          if (itemStruct) {
+            if (itemStruct.desc) caption = decodeEntities(itemStruct.desc);
+            if (itemStruct.createTime) createTime = parseInt(itemStruct.createTime);
+            if (itemStruct.video?.cover) imgUrl = itemStruct.video.cover;
+            else if (itemStruct.video?.originCover) imgUrl = itemStruct.video.originCover;
+          }
+        } catch (e) {}
+      }
+
+      // Try SIGI_STATE
+      if (!caption) {
+        const sigiMatch = html.match(/<script[^>]+id="SIGI_STATE"[^>]*>(.*?)<\/script>/s);
+        if (sigiMatch) {
+          try {
+            const sigi = JSON.parse(sigiMatch[1]);
+            const item = (sigi.ItemModule && vidId) ? sigi.ItemModule[vidId] : Object.values(sigi.ItemModule || {})[0];
+            if (item) {
+              if (item.desc) caption = decodeEntities(item.desc);
+              if (item.createTime) createTime = parseInt(item.createTime);
+              if (item.video?.cover) imgUrl = item.video.cover;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // Try JSON-LD
+      if (!caption) {
+        const ldMatches = html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>(.*?)<\/script>/gs);
+        for (const m of ldMatches) {
+          try {
+            const ld = JSON.parse(m[1]);
+            if (ld.description) caption = decodeEntities(ld.description);
+            if (ld.name && !caption) caption = decodeEntities(ld.name);
+            if (ld.thumbnailUrl && !imgUrl) imgUrl = ld.thumbnailUrl;
+            if (ld.uploadDate && !createTime) {
+              const dt = new Date(ld.uploadDate);
+              if (!isNaN(dt.getTime())) createTime = Math.floor(dt.getTime() / 1000);
+            }
+          } catch (e) {}
+        }
+      }
+
+      // Fallback meta
+      if (!caption) {
+        const metaDesc = extractMeta(html, 'og:description') || extractMeta(html, 'description');
+        if (metaDesc && !metaDesc.startsWith('TikTok ·')) caption = metaDesc;
+      }
+      if (!imgUrl) {
+        imgUrl = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image');
+      }
+    }
+  } catch (e) {}
+
+  // 2. Fallback to TikWM public API if caption is still missing or generic
+  if (!caption || caption.startsWith('TikTok ·') || caption.length < 5) {
+    try {
+      const tikRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(targetUrl)}`);
+      if (tikRes.ok) {
+        const tikData = await tikRes.json();
+        if (tikData.code === 0 && tikData.data) {
+          const d = tikData.data;
+          if (d.title) caption = d.title;
+          else if (d.content_desc) caption = d.content_desc;
+          if (d.create_time && !createTime) createTime = parseInt(d.create_time);
+          if (!imgUrl && d.cover) imgUrl = d.cover;
+          else if (!imgUrl && d.origin_cover) imgUrl = d.origin_cover;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Fallback to oEmbed for thumbnail / iframe
+  if (!imgUrl || !caption) {
+    try {
+      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(targetUrl)}`;
+      const oRes = await fetch(oembedUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (oRes.ok) {
+        const data = await oRes.json();
+        if (data.title && (!caption || caption.startsWith('TikTok ·'))) {
+          caption = data.title;
+        }
+        if (!imgUrl && data.thumbnail_url) imgUrl = data.thumbnail_url;
+        if (!embedHtml && data.html) embedHtml = data.html;
+      }
+    } catch (e) {}
+  }
+
+  // 4. Fallback to OpenGraph Crawler
+  if (!imgUrl) {
+    try {
+      const cRes = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+        },
+        redirect: 'follow'
+      });
+      if (cRes.ok) {
+        const html = await cRes.text();
+        const ogImg = extractMeta(html, 'og:image') || extractMeta(html, 'lark:url:video_cover_image_url') || extractMeta(html, 'twitter:image');
+        if (ogImg) imgUrl = ogImg;
+      }
+    } catch (e) {}
+  }
+
+  // 5. Derive Clean Title from Caption
+  if (caption && (!title || title.startsWith('TikTok ·') || title === 'คลิป TikTok · สมาร์ทกรีน')) {
+    const firstLine = caption.split('\n').map(l => l.trim()).filter(Boolean)[0] || '';
+    if (firstLine) {
+      title = firstLine.slice(0, 90);
+    } else {
+      title = caption.slice(0, 90);
+    }
+  }
+
+  if (!title) title = 'คลิป TikTok · สมาร์ทกรีน';
+  if (!caption) caption = title;
+
+  // 6. Calculate Bangkok Post Date (GMT+7)
   let postDate = '';
-  if (vidId) {
+  if (createTime) {
+    try {
+      const dt = new Date((createTime + 7 * 3600) * 1000);
+      if (dt.getFullYear() >= 2020 && dt.getFullYear() <= 2035) {
+        postDate = dt.toISOString().slice(0, 10);
+      }
+    } catch (e) {}
+  }
+  if (!postDate && vidId) {
     try {
       const ts = Number(BigInt(vidId) >> 32n);
       const dt = new Date((ts + 7 * 3600) * 1000);
@@ -159,48 +324,7 @@ async function handleTikTok(url) {
     postDate = new Date().toISOString().slice(0, 10);
   }
 
-  let title = '';
-  let caption = '';
-  let imgUrl = '';
-  let embedHtml = '';
-
-  // 1. Try oEmbed
-  try {
-    const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
-    const oRes = await fetch(oembedUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    if (oRes.ok) {
-      const data = await oRes.json();
-      title = data.title || '';
-      caption = data.title || '';
-      imgUrl = data.thumbnail_url || '';
-      embedHtml = data.html || '';
-    }
-  } catch (e) {}
-
-  // 2. Try OpenGraph Crawler
-  try {
-    const cRes = await fetch(url, {
-      headers: {
-        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
-      },
-      redirect: 'follow'
-    });
-    if (cRes.ok) {
-      const html = await cRes.text();
-      const ogImg = extractMeta(html, 'og:image') || extractMeta(html, 'lark:url:video_cover_image_url') || extractMeta(html, 'twitter:image');
-      if (ogImg) imgUrl = ogImg;
-      const ogTitle = extractMeta(html, 'lark:url:video_title') || extractMeta(html, 'og:title');
-      if (ogTitle && (!title || title.startsWith('TikTok ·'))) title = ogTitle;
-      const ogDesc = extractMeta(html, 'og:description');
-      if (ogDesc && (!caption || caption.startsWith('TikTok ·'))) caption = ogDesc;
-    }
-  } catch (e) {}
-
-  if (!title) title = 'คลิป TikTok · สมาร์ทกรีน';
-  if (!caption) caption = title;
-
+  // 7. Download cover image buffer
   let imageId = null;
   let imageDataUrl = null;
   if (imgUrl) {
@@ -225,7 +349,7 @@ async function handleTikTok(url) {
     title: title.slice(0, 90),
     caption: caption,
     date: postDate,
-    link: url,
+    link: targetUrl,
     isReel: true,
     videoId: vidId,
     images: imageId ? [imageId] : [],

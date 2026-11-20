@@ -208,15 +208,77 @@ def extract_social_url(url):
         except Exception as e:
             print('TikTok oembed fetch error:', e)
 
-        # If title or caption is still generic, fetch via headless browser
+        # If title or caption is still generic, fetch via direct Firefox UA or TikWM
         if not title or title.startswith('TikTok ·') or not caption or caption.startswith('TikTok ·'):
-            h_title, h_caption, h_date = fetch_tiktok_details_via_headless(url)
-            if h_title:
-                title = h_title
-            if h_caption:
-                caption = h_caption
-            if not post_date and h_date:
-                post_date = h_date
+            # 1. Try Direct Firefox UA fetch
+            try:
+                ff_req = urllib.request.Request(
+                    url,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'th,en-US;q=0.9,en;q=0.8'
+                    }
+                )
+                with urllib.request.urlopen(ff_req, timeout=8) as ff_res:
+                    ff_html = ff_res.read().decode('utf-8', errors='ignore')
+                    m_univ = re.search(r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>', ff_html)
+                    if m_univ:
+                        jd = json.loads(m_univ.group(1))
+                        scope = jd.get('__DEFAULT_SCOPE__', {})
+                        item_struct = scope.get('webapp.video-detail', {}).get('itemInfo', {}).get('itemStruct', {})
+                        if item_struct:
+                            desc = item_struct.get('desc', '').strip()
+                            if desc:
+                                caption = html.unescape(desc)
+                                lines = [ln.strip() for ln in caption.split('\n') if ln.strip()]
+                                title = lines[0][:90] if lines else caption[:90]
+                            c_time = item_struct.get('createTime')
+                            if c_time and not post_date:
+                                dt = datetime.datetime.fromtimestamp(int(c_time), datetime.timezone.utc) + datetime.timedelta(hours=7)
+                                if 2020 <= dt.year <= 2035:
+                                    post_date = dt.strftime('%Y-%m-%d')
+                            if not img_id:
+                                cov = item_struct.get('video', {}).get('cover') or item_struct.get('video', {}).get('originCover')
+                                if cov:
+                                    img_id = download_image(cov)
+            except Exception as e:
+                print('Direct Firefox UA fetch error:', e)
+
+            # 2. Try TikWM
+            if not title or title.startswith('TikTok ·') or not caption or caption.startswith('TikTok ·'):
+                try:
+                    tik_url = f"https://www.tikwm.com/api/?url={urllib.parse.quote(url)}"
+                    tik_req = urllib.request.Request(tik_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(tik_req, timeout=6) as tik_res:
+                        tik_data = json.loads(tik_res.read().decode('utf-8'))
+                        if tik_data.get('code') == 0 and tik_data.get('data'):
+                            td = tik_data['data']
+                            desc = td.get('title') or td.get('content_desc') or ''
+                            if desc:
+                                caption = desc
+                                lines = [ln.strip() for ln in caption.split('\n') if ln.strip()]
+                                title = lines[0][:90] if lines else caption[:90]
+                            if td.get('create_time') and not post_date:
+                                dt = datetime.datetime.fromtimestamp(int(td['create_time']), datetime.timezone.utc) + datetime.timedelta(hours=7)
+                                if 2020 <= dt.year <= 2035:
+                                    post_date = dt.strftime('%Y-%m-%d')
+                            if not img_id:
+                                cov = td.get('cover') or td.get('origin_cover')
+                                if cov:
+                                    img_id = download_image(cov)
+                except Exception as e:
+                    print('TikWM fetch error:', e)
+
+            # 3. Headless browser fallback
+            if not title or title.startswith('TikTok ·') or not caption or caption.startswith('TikTok ·'):
+                h_title, h_caption, h_date = fetch_tiktok_details_via_headless(url)
+                if h_title:
+                    title = h_title
+                if h_caption:
+                    caption = h_caption
+                if not post_date and h_date:
+                    post_date = h_date
 
         if not title:
             title = 'คลิป TikTok · สมาร์ทกรีน'
