@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="คลังข้อมูลสมาร์ทกรีน รวมสินค้า โปรโมชัน สคริปต์ตอบลูกค้า พรีเซนเทชัน และโพสต์อัปเดตล่าสุด">
 <meta name="twitter:image" content="https://smg-hub.vercel.app/og-cover.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
 <style>
 
 :root{
@@ -784,6 +784,262 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
 .card.flash .usage{animation:upulse 1.2s ease-out}
 @keyframes upulse{0%{box-shadow:0 0 0 0 rgb(120 200 110 / .55)}100%{box-shadow:0 0 0 14px rgb(120 200 110 / 0)}}
 }
+
+/* ===== ความคมชัดและขนาดตัวอักษรให้อ่านง่าย สบายตา (High Readability & Typography) ===== */
+:root {
+  --fs-body: 16.5px;
+  --fs-h1: clamp(28px, 4vw, 38px);
+  --fs-h2: clamp(22px, 2.5vw, 26px);
+  --fs-h3: 18.5px;
+  --fs-sub: 15.5px;
+  --fs-meta: 13.5px;
+  --fs-btn: 14.5px;
+  --lh-body: 1.68;
+  --lh-tight: 1.35;
+  --muted: #38453d;
+  --fg: #101a14;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --muted: #aab8a5;
+    --fg: #f2f5ed;
+  }
+}
+:root[data-theme="dark"] {
+  --muted: #aab8a5;
+  --fg: #f2f5ed;
+}
+
+/* โหมดขยายขนาดตัวอักษร (A- / A+) */
+html[data-font-size="lg"] {
+  --fs-body: 18px;
+  --fs-h1: clamp(30px, 4.2vw, 42px);
+  --fs-h2: clamp(24px, 2.8vw, 29px);
+  --fs-h3: 20.5px;
+  --fs-sub: 17px;
+  --fs-meta: 14.5px;
+  --fs-btn: 15.5px;
+}
+html[data-font-size="xl"] {
+  --fs-body: 20px;
+  --fs-h1: clamp(32px, 4.6vw, 46px);
+  --fs-h2: clamp(26px, 3.2vw, 32px);
+  --fs-h3: 22.5px;
+  --fs-sub: 18.5px;
+  --fs-meta: 15.5px;
+  --fs-btn: 16.5px;
+}
+
+body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color: var(--fg);
+}
+
+/* หัวข้อและข้อความในการ์ด */
+.card h3 {
+  font-size: var(--fs-h3) !important;
+  font-weight: 700 !important;
+  line-height: var(--lh-tight) !important;
+  color: var(--fg);
+}
+.card p, .card p.cap {
+  font-size: var(--fs-sub) !important;
+  line-height: var(--lh-body) !important;
+  color: var(--fg);
+}
+.card.post.reel h3 {
+  font-size: 15.5px !important;
+}
+.meta {
+  font-size: var(--fs-meta) !important;
+  color: var(--muted) !important;
+  gap: 8px !important;
+}
+.chip {
+  font-size: var(--fs-meta) !important;
+  font-weight: 600 !important;
+  padding: 4px 11px !important;
+}
+.btn {
+  font-size: var(--fs-btn) !important;
+  font-weight: 600 !important;
+  min-height: 40px !important;
+  padding: 8px 16px !important;
+}
+.btn.sm {
+  font-size: calc(var(--fs-btn) - 1px) !important;
+  min-height: 34px !important;
+  padding: 5px 12px !important;
+}
+
+/* สคริปต์การขายและคำแนะนำ อ่านง่ายเวลาคุยโทรศัพท์กับลูกค้า */
+.script {
+  font-size: calc(var(--fs-body) - 0.5px) !important;
+  line-height: 1.75 !important;
+  font-weight: 450 !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  color: var(--fg) !important;
+}
+.qa-core {
+  font-size: var(--fs-sub) !important;
+  line-height: 1.65 !important;
+  padding: 14px 16px !important;
+}
+.usage-t, .dont {
+  font-size: var(--fs-sub) !important;
+  line-height: 1.68 !important;
+}
+.usage-h b {
+  font-size: var(--fs-h3) !important;
+}
+.kv {
+  font-size: var(--fs-sub) !important;
+  gap: 4px 16px !important;
+}
+.kv dt {
+  font-size: var(--fs-meta) !important;
+  color: var(--muted) !important;
+}
+
+/* แอปและโซเชียล */
+.app-body b {
+  font-size: var(--fs-h3) !important;
+}
+.app-body span, .apps-sub {
+  font-size: var(--fs-sub) !important;
+  line-height: 1.5 !important;
+}
+.soc-body b {
+  font-size: var(--fs-h3) !important;
+}
+.soc-body span, .soc-body small {
+  font-size: var(--fs-sub) !important;
+  line-height: 1.5 !important;
+}
+
+/* ฟีดและหัวข้อส่วน */
+.sec-h h2 {
+  font-size: var(--fs-h2) !important;
+}
+.feed time {
+  font-size: var(--fs-meta) !important;
+  font-weight: 600 !important;
+}
+.feed li {
+  font-size: var(--fs-sub) !important;
+  line-height: 1.6 !important;
+}
+.filters button {
+  font-size: var(--fs-btn) !important;
+  padding: 7px 16px !important;
+}
+
+/* ฟอร์มและช่องกรอก */
+.field label {
+  font-size: var(--fs-sub) !important;
+  font-weight: 600 !important;
+}
+.field .hint {
+  font-size: var(--fs-meta) !important;
+}
+.field input, .field select, .field textarea, .search input {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+/* เมนูแท็บแถบด้านบน (Desktop) และล่าง (Mobile) */
+nav.tabs a {
+  font-size: 15.5px !important;
+  font-weight: 600 !important;
+  padding: 8px 16px !important;
+}
+nav.tabs .ti {
+  width: 20px !important;
+  height: 20px !important;
+}
+nav.tabs .n {
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+/* ปุ่มปรับขนาดตัวอักษรบนหัวเว็บ */
+.fs-pill {
+  border-radius: 999px !important;
+  padding: 6px 12px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: rgb(255 255 255 / .14) !important;
+  border: 1px solid rgb(255 255 255 / .28) !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  flex: none !important;
+  transition: all .2s !important;
+  min-height: 34px !important;
+}
+.fs-pill:hover {
+  background: rgb(255 255 255 / .24) !important;
+  border-color: #4fc46a !important;
+  color: #ffffff !important;
+}
+.fs-pill svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 760px) {
+  body {
+    font-size: 16px !important;
+  }
+  nav.tabs a {
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    padding: 6px 2px 4px !important;
+    letter-spacing: -0.01em !important;
+  }
+  nav.tabs .ti {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  nav.tabs .n {
+    font-size: 11px !important;
+    line-height: 16px !important;
+  }
+  .card {
+    padding: 16px !important;
+  }
+  .card.post.reel h3 {
+    font-size: 15px !important;
+    line-height: 1.4 !important;
+  }
+  .card.post.reel .btn {
+    font-size: 13.5px !important;
+    min-height: 38px !important;
+  }
+  .brand .hubname {
+    font-size: 20px !important;
+  }
+  .brand small {
+    font-size: 13px !important;
+  }
+}
+@media (max-width: 560px) {
+  #fsLabel {
+    display: none;
+  }
+  .fs-pill {
+    padding: 6px 9px !important;
+  }
+}
 </style>
 
 <header>
@@ -798,6 +1054,10 @@ header input:focus{box-shadow:0 0 0 4px rgb(120 200 110 / .28)}
         <input id="q" type="search" placeholder="ค้นหาทุกอย่าง สินค้า โปร แอป สไลด์ โพสต์…" autocomplete="off">
       </label>
       <div class="soc-mini" id="socMini"></div>
+      <button class="btn sm fs-pill" id="btnFontCycle" type="button" title="ปรับขนาดตัวอักษร (แตะเพื่อเปลี่ยน)" aria-label="ปรับขนาดตัวอักษร">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v12"/><path d="M4 13h6"/><path d="M14 19v-8a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v8"/><path d="M14 15h5"/></svg>
+        <span id="fsLabel">ขนาด: ปกติ</span>
+      </button>
       <button class="btn" id="editToggle" type="button" hidden>โหมดแก้ไข</button>
     </div>
     <nav class="tabs" id="tabs"></nav>
@@ -1206,7 +1466,43 @@ function checkAdminAccess(){
   return store.get('smg-admin') === '1';
 }
 
+function initFontSize(){
+  const SIZES = [
+    { id: 'md', label: 'ขนาด: ปกติ', desc: 'ขนาดมาตรฐาน (อ่านชัด)' },
+    { id: 'lg', label: 'ขนาด: ใหญ่', desc: 'ขนาดใหญ่ (+10%)' },
+    { id: 'xl', label: 'ขนาด: ใหญ่มาก', desc: 'ขนาดใหญ่พิเศษ (+25%)' }
+  ];
+  let cur = localStorage.getItem('smg-font-size') || 'md';
+  const apply = (size, notify) => {
+    cur = size;
+    localStorage.setItem('smg-font-size', size);
+    if(size === 'md'){
+      document.documentElement.removeAttribute('data-font-size');
+    } else {
+      document.documentElement.setAttribute('data-font-size', size);
+    }
+    const btn = document.getElementById('btnFontCycle');
+    const lbl = document.getElementById('fsLabel');
+    const item = SIZES.find(x=>x.id===size) || SIZES[0];
+    if(lbl) lbl.textContent = item.label;
+    if(btn) btn.setAttribute('title', `ปรับขนาดตัวอักษร: ปัจจุบันคือ ${item.desc} (แตะเพื่อเปลี่ยน)`);
+    if(notify) toast(`ปรับขนาดตัวอักษร: ${item.desc}`);
+  };
+
+  apply(cur, false);
+
+  const btn = document.getElementById('btnFontCycle');
+  if(btn){
+    btn.onclick = () => {
+      const idx = SIZES.findIndex(x=>x.id===cur);
+      const next = SIZES[(idx + 1) % SIZES.length];
+      apply(next.id, true);
+    };
+  }
+}
+
 async function boot(){
+  initFontSize();
   CAN_EDIT = checkAdminAccess();
   EDIT = CAN_EDIT && store.get('mh-edit') === '1';
   route();
