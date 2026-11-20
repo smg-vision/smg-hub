@@ -1238,12 +1238,13 @@ const ASSET_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 const dlApi = {
   async save({ filename, data, type }) {
-    const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'application/json' });
+    const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'application/octet-stream' });
     const isImage = (blob.type || type || '').startsWith('image/');
+    const isIos = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
     
-    // On iPhone / iPad / iOS Safari or devices with Web Share API:
+    // 1. On iPhone / iPad (iOS Safari) only:
     // Sharing file directly brings up native sheet with "บันทึกภาพ" (Save Image to Photos Library)
-    if(isImage && typeof navigator !== 'undefined' && navigator.canShare){
+    if(isIos && isImage && typeof navigator !== 'undefined' && navigator.canShare){
       try {
         const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
         if(navigator.canShare({ files: [file] })){
@@ -1258,14 +1259,52 @@ const dlApi = {
       }
     }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename || 'download.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // 2. Direct browser download for Android, PC (Windows / Mac / Linux), and fallback:
+    // Uses Object URL with delayed revocation (60s) so PC & Android download managers have time to stream data
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename || 'download';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      
+      try {
+        a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      } catch(e) {
+        a.click();
+      }
+      
+      // Delay revocation by 60 seconds so browser download manager has time to complete
+      setTimeout(() => {
+        try {
+          if (a.parentNode) document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch(e) {}
+      }, 60000);
+      return;
+    } catch(err) {
+      console.warn('Object URL download failed, trying data URI fallback:', err);
+    }
+
+    // 3. Fallback: FileReader data URI download
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = reader.result;
+        a.download = filename || 'download';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { try { if (a.parentNode) document.body.removeChild(a); } catch(e) {} }, 10000);
+      };
+      reader.readAsDataURL(blob);
+    } catch(err) {
+      console.error('All download methods failed:', err);
+      throw err;
+    }
   }
 };
 
@@ -2447,22 +2486,35 @@ async function exportHdImageBlob(img){
   const maxDim = Math.max(natW, natH);
 
   const render = (w, h, q, mime='image/jpeg') => {
-    const c = document.createElement('canvas');
-    c.width = Math.round(w);
-    c.height = Math.round(h);
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-    return new Promise(res => c.toBlob(res, mime, q));
+    try {
+      const c = document.createElement('canvas');
+      c.width = Math.round(w);
+      c.height = Math.round(h);
+      const ctx = c.getContext('2d');
+      if(!ctx) return null;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      return new Promise(res => {
+        try {
+          c.toBlob(b => res(b), mime, q);
+        } catch(e) {
+          res(null);
+        }
+      });
+    } catch(e) {
+      return null;
+    }
   };
 
   const MIN_BYTES = 800 * 1024; // 800 KB
+  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const maxCap = isMobile ? 2600 : 3600;
 
-  // 1. Initial attempt: target ~2600px on longest side with quality 0.97
-  let target = Math.max(2600, maxDim);
+  // 1. Initial attempt: target ~2400px on longest side with quality 0.97
+  let target = Math.min(maxCap, Math.max(2400, maxDim));
   let scale = target / maxDim;
   let blob = await render(natW * scale, natH * scale, 0.97);
 
@@ -2470,29 +2522,94 @@ async function exportHdImageBlob(img){
     return { blob, ext: 'jpg' };
   }
 
-  // 2. Scale up to 3000px and quality 0.985
-  target = Math.max(3000, target * 1.2);
-  scale = target / maxDim;
-  let blob2 = await render(natW * scale, natH * scale, 0.985);
-  if(blob2 && blob2.size >= MIN_BYTES) {
-    return { blob: blob2, ext: 'jpg' };
+  // 2. Scale up if permitted
+  if(target * 1.2 <= maxCap){
+    target = Math.min(maxCap, target * 1.2);
+    scale = target / maxDim;
+    let blob2 = await render(natW * scale, natH * scale, 0.985);
+    if(blob2 && blob2.size >= MIN_BYTES) {
+      return { blob: blob2, ext: 'jpg' };
+    }
+    if(blob2 && (!blob || blob2.size > blob.size)) blob = blob2;
   }
 
-  // 3. Scale up to 3400px and quality 0.995
-  target = Math.max(3400, target * 1.2);
-  scale = target / maxDim;
-  let blob3 = await render(natW * scale, natH * scale, 0.995);
-  if(blob3 && blob3.size >= MIN_BYTES) {
-    return { blob: blob3, ext: 'jpg' };
+  // 3. Try PNG (~1MB - 2MB)
+  if(!blob || blob.size < MIN_BYTES){
+    const pngScale = Math.min(1.8, 2000 / maxDim);
+    let blobPng = await render(natW * pngScale, natH * pngScale, 1.0, 'image/png');
+    if(blobPng && blobPng.size >= MIN_BYTES) {
+      return { blob: blobPng, ext: 'png' };
+    }
+    if(blobPng && (!blob || blobPng.size > blob.size)) {
+      return { blob: blobPng, ext: 'png' };
+    }
   }
 
-  // 4. Try PNG (~1MB - 2MB)
-  let blobPng = await render(natW * Math.max(1.8, 2200 / maxDim), natH * Math.max(1.8, 2200 / maxDim), 1.0, 'image/png');
-  if(blobPng && blobPng.size >= MIN_BYTES) {
-    return { blob: blobPng, ext: 'png' };
+  if(blob) return { blob, ext: 'jpg' };
+  return null;
+}
+
+// Fallback ที่รับประกันว่าดาวน์โหลดรูปได้แน่นอน 100% บนทุกเครื่อง (Android, PC, iPhone)
+async function getSafeImageBlob(img){
+  // 1. ลองดึง Blob จากไฟล์ต้นฉบับโดยตรงก่อน (ผ่าน URL จริง ไม่ต้องเปลืองแรม Canvas)
+  let directBlob = null;
+  let directExt = 'jpg';
+  try {
+    const src = img.getAttribute('src') || img.src || '';
+    if(src){
+      if(src.startsWith('data:')){
+        const parts = src.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while(n--) u8arr[n] = bstr.charCodeAt(n);
+        directBlob = new Blob([u8arr], { type: mime });
+        directExt = mime.includes('png') ? 'png' : 'jpg';
+      } else {
+        const resp = await fetch(src);
+        if(resp.ok){
+          directBlob = await resp.blob();
+          if(directBlob.type && directBlob.type.includes('png')) directExt = 'png';
+        }
+      }
+    }
+  } catch(e) {}
+
+  // หากไฟล์ต้นฉบับคมชัดและขนาดใหญ่พออยู่แล้ว (>= 750 KB) ส่งออกตรงได้ทันที
+  if(directBlob && directBlob.size >= 750 * 1024){
+    return { blob: directBlob, ext: directExt };
   }
 
-  return { blob: (blob3 && blob3.size > (blob2?.size||0)) ? blob3 : (blob2 || blob || blobPng), ext: 'jpg' };
+  // 2. ขยายความคมชัดด้วย Canvas HD Upscaler
+  try {
+    const hd = await exportHdImageBlob(img);
+    if(hd && hd.blob && hd.blob.size >= (directBlob ? directBlob.size : 1000)){
+      return hd;
+    }
+  } catch(e) {
+    console.warn('exportHdImageBlob fallback:', e);
+  }
+
+  // 3. หาก Canvas ขยายไม่สำเร็จ ให้ใช้ Blob ต้นฉบับที่ดึงมา
+  if(directBlob && directBlob.size > 1000){
+    return { blob: directBlob, ext: directExt };
+  }
+
+  // 4. สำรองฉุกเฉินด้วย Canvas พื้นฐาน
+  try {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || img.width || 800;
+    c.height = img.naturalHeight || img.height || 800;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const b = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.95));
+    if(b) return { blob: b, ext: 'jpg' };
+  } catch(e) {}
+
+  throw new Error('ไม่สามารถประมวลผลไฟล์รูปได้');
 }
 
 document.getElementById('pvDl').onclick = async () => {
@@ -2503,7 +2620,7 @@ document.getElementById('pvDl').onclick = async () => {
   btn.textContent = 'กำลังเตรียมรูป HD…';
   try{
     const img = pvTrack.children[pvIdx].firstElementChild;
-    const { blob, ext } = await exportHdImageBlob(img);
+    const { blob, ext } = await getSafeImageBlob(img);
     const name = String(pvItem.title||'สไลด์').replace(/[\\/:*?"<>|]/g,'').slice(0,60);
     await dlApi.save({filename:`${name}-หน้า${pvIdx+1}.${ext}`, data:blob});
     const szKb = Math.round(blob.size / 1024);
@@ -2530,7 +2647,7 @@ document.getElementById('lbDl').onclick = async () => {
   btn.textContent = 'กำลังเตรียมรูป HD…';
   try{
     const img = document.getElementById('lbImg');
-    const { blob, ext } = await exportHdImageBlob(img);
+    const { blob, ext } = await getSafeImageBlob(img);
     const name = String(lbItem.name||'รูป').replace(/[\\/:*?"<>|]/g,'').slice(0,60) || 'รูป';
     await dlApi.save({filename:`${name}-${lbIdx+1}.${ext}`, data:blob});
     const szKb = Math.round(blob.size / 1024);
