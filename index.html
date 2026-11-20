@@ -366,7 +366,7 @@ header .search svg{color:#cfe3d4}
 .pgroup:last-child{margin-bottom:0}
 .photo-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 .card.post .cover{aspect-ratio:1/1}
-.card.post .cover img{width:100%;height:100%;object-fit:cover;object-position:center top}
+.card.post .cover img{width:100%;height:100%;object-fit:cover;object-position:center 68%}
 .card.post h3{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .reel-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
 .card.post.reel{padding:12px;gap:8px}
@@ -530,7 +530,7 @@ body[data-tab="plan"] .fx:not(.in){transform:scale(.95)}
 /* รูปปกการ์ดไม่ให้ใหญ่เกิน (มือถือ) */
 .card > .cover:not(.golink){background:var(--sunk)}
 .card:not(.post) > .cover img{max-height:300px;width:100%;object-fit:contain}
-@media (max-width:760px){.card:not(.post) > .cover img{max-height:min(62vw,240px)}.card.post:not(.reel) .cover{aspect-ratio:4/3}}
+@media (max-width:760px){.card:not(.post) > .cover img{max-height:min(62vw,240px)}.card.post:not(.reel) .cover{aspect-ratio:1/1}}
 /* กันหน้าล้นขอบจอมือถือ */
 html,body{overflow-x:clip;max-width:100%}
 main{grid-template-columns:minmax(0,1fr)}
