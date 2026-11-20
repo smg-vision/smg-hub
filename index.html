@@ -1070,7 +1070,7 @@ const SmgDB = {
       if (Array.isArray(DB.plan)) {
         DB.plan.sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')) || String(b.id||'').localeCompare(String(a.id||'')));
       }
-      if (Array.isArray(data.updates)) DB.updates = data.updates;
+      if (Array.isArray(data.updates)) DB.updates = data.updates.map(u => ({...u, what: fixEmojis(u.what)}));
       if (data.social && typeof data.social === 'object') DB.social = data.social;
       try { localStorage.setItem('smg_hub_data', JSON.stringify(data)); } catch(e) {}
       return true;
@@ -1176,9 +1176,25 @@ const imgUrl = id => {
   return './images/' + (IDMAP[id] || id);
 };
 
+function fixEmojis(str){
+  if(typeof str !== 'string') return str;
+  return str.replace(/[\uF300-\uFA00]/g, ch => {
+    const code = ch.charCodeAt(0);
+    if(code >= 0xF300 && code <= 0xFA00){
+      return String.fromCodePoint(code + 0x10000);
+    }
+    return ch;
+  });
+}
+
 function cleanItem(id, d){
   const o = {...d, id};
-  o.images = Array.isArray(d.images) ? d.images.filter(s=>typeof s==='string' && ASSET_ID.test(s)) : [];
+  if(o.title) o.title = fixEmojis(o.title);
+  if(o.caption) o.caption = fixEmojis(o.caption);
+  if(o.name) o.name = fixEmojis(o.name);
+  if(o.script) o.script = fixEmojis(o.script);
+  if(o.what) o.what = fixEmojis(o.what);
+  o.images = Array.isArray(d.images) ? d.images.filter(s=>typeof s==='string' && (ASSET_ID.test(s) || s.startsWith('data:') || s.startsWith('http'))) : [];
   const f = d.file;
   o.file = f && typeof f==='object' && typeof f.id==='string' && ASSET_ID.test(f.id) ? {id:f.id, name:String(f.name||'presentation.pdf').slice(0,120), size:Number(f.size)||0} : null;
   return o;
@@ -1906,8 +1922,8 @@ function openForm(col, id, preset){
           const dateIn = form.querySelector('[name="date"]');
           const statIn = form.querySelector('[name="status"]');
           
-          if(titleIn && data.title) titleIn.value = data.title;
-          if(capIn && data.caption) capIn.value = data.caption;
+          if(titleIn && data.title) titleIn.value = fixEmojis(data.title);
+          if(capIn && data.caption) capIn.value = fixEmojis(data.caption);
           if(chIn && data.ch) chIn.value = data.ch;
           if(linkIn && data.link) linkIn.value = data.link;
           if(dateIn && data.date) dateIn.value = data.date;

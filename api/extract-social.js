@@ -3,8 +3,12 @@ const crypto = require('crypto');
 function decodeEntities(str) {
   if (!str) return '';
   return str
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&#([0-9]+);/g, (_, d) => String.fromCharCode(parseInt(d, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => {
+      try { return String.fromCodePoint(parseInt(h, 16)); } catch(e){ return ''; }
+    })
+    .replace(/&#([0-9]+);/g, (_, d) => {
+      try { return String.fromCodePoint(parseInt(d, 10)); } catch(e){ return ''; }
+    })
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, '&')
