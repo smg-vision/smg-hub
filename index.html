@@ -24,14 +24,59 @@
 <meta name="twitter:image" content="https://smg-hub.vercel.app/og-cover.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="preload" href="./fonts/db-helvethaica-mon-x-reg.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="./fonts/db-helvethaica-mon-x-bd.ttf" as="font" type="font/ttf" crossorigin>
 <style>
+@font-face {
+  font-family: 'DB HelvethaicaMon X';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('DB HelvethaicaMon X'),
+       local('DB Helvethaica Mon X'),
+       local('DBHelvethaicaMonX'),
+       local('DB HelvethaicaMon X 55 Regular'),
+       url('./fonts/db-helvethaica-mon-x-reg.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'DB HelvethaicaMon X';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('DB HelvethaicaMon X Med'),
+       local('DB Helvethaica Mon X Med'),
+       local('DBHelvethaicaMonXMed'),
+       local('DB HelvethaicaMon X 65 Med'),
+       url('./fonts/db-helvethaica-mon-x-med.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'DB HelvethaicaMon X';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('DB HelvethaicaMon X Med'),
+       local('DB Helvethaica Mon X Med'),
+       local('DBHelvethaicaMonXMed'),
+       url('./fonts/db-helvethaica-mon-x-med.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'DB HelvethaicaMon X';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('DB HelvethaicaMon X Bd'),
+       local('DB Helvethaica Mon X Bd'),
+       local('DBHelvethaicaMonXBd'),
+       local('DB HelvethaicaMon X 75 Bd'),
+       url('./fonts/db-helvethaica-mon-x-bd.ttf') format('truetype');
+}
 
 :root{
   --bg:#f5f6f1; --surface:#ffffff; --sunk:#eceee6; --fg:#1d2419; --muted:#5f6a58; --line:#dde1d4;
   --accent:#2f6b3a; --accent-fg:#ffffff; --accent-soft:#e1eedf; --cane:#b08512; --cane-soft:#f6ecd0;
   --ok:#2e7d4f; --ok-soft:#dcefe3; --warn:#9a6200; --warn-soft:#f8e9cc; --info:#2f5f8f; --info-soft:#dde8f3; --hot:#b3402e; --hot-soft:#f6ddd8;
-  --display:"Anuphan","IBM Plex Sans Thai",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",system-ui,sans-serif;
-  --body:"IBM Plex Sans Thai","Noto Sans Thai","Leelawadee UI",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",system-ui,sans-serif;
+  --display:"DB HelvethaicaMon X","DB Helvethaica Mon X","DBHelvethaicaMonX","Anuphan","IBM Plex Sans Thai",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",system-ui,sans-serif;
+  --body:"DB HelvethaicaMon X","DB Helvethaica Mon X","DBHelvethaicaMonX","IBM Plex Sans Thai","Noto Sans Thai","Leelawadee UI",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",system-ui,sans-serif;
   --r:10px; color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root{
